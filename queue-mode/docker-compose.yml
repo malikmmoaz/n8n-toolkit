@@ -173,7 +173,7 @@ services:
 
   # ===== Evolution API =====
   evolution-api:
-    image: atendai/evolution-api:v2.2.3
+    image: evoapicloud/evolution-api:v2.3.0
     restart: unless-stopped
     env_file: [.env]
     environment:
