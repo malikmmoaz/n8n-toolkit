@@ -1390,14 +1390,16 @@ verify_traefik_certificate() {
 list_exposed_fqdns() {
     [[ -f "$ENV_FILE" ]] || { return 0; }
 
-    local n8n graf prom profiles expose
+    local n8n graf prom evo profiles expose
     n8n="$(read_env_var "$ENV_FILE" N8N_FQDN || true)"
     graf="$(read_env_var "$ENV_FILE" GRAFANA_FQDN || true)"
     prom="$(read_env_var "$ENV_FILE" PROMETHEUS_FQDN || true)"
+    evo="$(read_env_var "$ENV_FILE" EVOLUTION_FQDN || true)"
     profiles="$(read_env_var "$ENV_FILE" COMPOSE_PROFILES || true)"
     expose="$(read_env_var "$ENV_FILE" EXPOSE_PROMETHEUS || echo false)"
 
     [[ -n "$n8n" ]] && printf '%s\n' "$n8n"
+    [[ -n "$evo" ]] && printf '%s\n' "$evo"
     if [[ "$profiles" == *monitoring* ]]; then
         [[ -n "$graf" ]] && printf '%s\n' "$graf"
         if [[ "${expose,,}" == "true" ]]; then

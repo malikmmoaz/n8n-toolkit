@@ -91,9 +91,11 @@ EXPOSE_PROMETHEUS=false
 SUBDOMAIN_N8N=""
 SUBDOMAIN_GRAFANA=""
 SUBDOMAIN_PROMETHEUS=""
+SUBDOMAIN_EVOLUTION=""
 N8N_FQDN=""
 GRAFANA_FQDN=""
 PROMETHEUS_FQDN=""
+EVOLUTION_FQDN=""
 BASIC_AUTH_USER=""
 BASIC_AUTH_PASS=""
 
@@ -187,6 +189,7 @@ Options:
   --subdomain-n8n <sub>               Override n8n subdomain (default: n8n)
   --subdomain-grafana <sub>           Override Grafana subdomain (default: grafana)
   --subdomain-prometheus <sub>        Override Prometheus subdomain (default: prometheus)
+  --subdomain-evolution <sub>         Override Evolution API subdomain (default: evolution)
   --basic-auth-user <user>            Traefik basic auth user for Grafana/Prometheus
   --basic-auth-pass <pass>            Traefik basic auth pass for Grafana/Prometheus
 
@@ -315,12 +318,14 @@ copy_templates_for_mode() {
     # Queue mode only
     if [[ "${INSTALL_MODE:-single}" == "queue" ]] || [[ "${DISCOVERED_MODE:-}" == "queue" ]]; then
         rotate_or_generate_secret "$ENV_FILE" REDIS_PASSWORD        16 "CHANGE_ME_BASE64_16_BYTES"
+        rotate_or_generate_secret "$ENV_FILE" EVOLUTION_API_KEY     16 "CHANGE_ME_BASE64_16_BYTES"
     fi
 
     # Subdomains & monitoring flags persisted in .env
     [[ -n "$SUBDOMAIN_N8N" ]]        && upsert_env_var "SUBDOMAIN_N8N" "$SUBDOMAIN_N8N" "$ENV_FILE"
     [[ -n "$SUBDOMAIN_GRAFANA" ]]    && upsert_env_var "SUBDOMAIN_GRAFANA" "$SUBDOMAIN_GRAFANA" "$ENV_FILE"
     [[ -n "$SUBDOMAIN_PROMETHEUS" ]] && upsert_env_var "SUBDOMAIN_PROMETHEUS" "$SUBDOMAIN_PROMETHEUS" "$ENV_FILE"
+    [[ -n "$SUBDOMAIN_EVOLUTION" ]]  && upsert_env_var "SUBDOMAIN_EVOLUTION" "$SUBDOMAIN_EVOLUTION" "$ENV_FILE"
 
     if $MONITORING; then
         upsert_env_var "COMPOSE_PROFILES" "monitoring" "$ENV_FILE"
@@ -351,23 +356,27 @@ copy_templates_for_mode() {
     fi
 
     # persist explicit FQDNs
-    local base_dom sub_n8n sub_graf sub_prom
+    local base_dom sub_n8n sub_graf sub_prom sub_evo
     base_dom="$(read_env_var "$ENV_FILE" DOMAIN)"
     sub_n8n="$(read_env_var "$ENV_FILE" SUBDOMAIN_N8N)"
     sub_graf="$(read_env_var "$ENV_FILE" SUBDOMAIN_GRAFANA)"
     sub_prom="$(read_env_var "$ENV_FILE" SUBDOMAIN_PROMETHEUS)"
+    sub_evo="$(read_env_var "$ENV_FILE" SUBDOMAIN_EVOLUTION)"
 
     sub_n8n="${sub_n8n:-n8n}"
     sub_graf="${sub_graf:-grafana}"
     sub_prom="${sub_prom:-prometheus}"
+    sub_evo="${sub_evo:-evolution}"
 
     N8N_FQDN="${sub_n8n:+$sub_n8n.}${base_dom}"
     GRAFANA_FQDN="${sub_graf:+$sub_graf.}${base_dom}"
     PROMETHEUS_FQDN="${sub_prom:+$sub_prom.}${base_dom}"
+    EVOLUTION_FQDN="${sub_evo:+$sub_evo.}${base_dom}"
 
     upsert_env_var "N8N_FQDN" "$N8N_FQDN" "$ENV_FILE"
     upsert_env_var "GRAFANA_FQDN" "$GRAFANA_FQDN" "$ENV_FILE"
     upsert_env_var "PROMETHEUS_FQDN" "$PROMETHEUS_FQDN" "$ENV_FILE"
+    upsert_env_var "EVOLUTION_FQDN" "$EVOLUTION_FQDN" "$ENV_FILE"
 
     # Secure secrets file
     chmod 600 "$ENV_FILE" || true
@@ -410,9 +419,10 @@ install_stack() {
     post_up_tls_checks || true
 
     # Summary
-    local graf_fqdn prom_fqdn expose_prom compose_profiles
+    local graf_fqdn prom_fqdn evo_fqdn expose_prom compose_profiles
     graf_fqdn="$(read_env_var "$ENV_FILE" GRAFANA_FQDN || true)"
     prom_fqdn="$(read_env_var "$ENV_FILE" PROMETHEUS_FQDN || true)"
+    evo_fqdn="$(read_env_var "$ENV_FILE" EVOLUTION_FQDN || true)"
     expose_prom="$(read_env_var "$ENV_FILE" EXPOSE_PROMETHEUS || echo false)"
     compose_profiles="$(read_env_var "$ENV_FILE" COMPOSE_PROFILES || true)"
 
@@ -420,6 +430,9 @@ install_stack() {
     echo "N8N has been successfully installed!"
     box_line "Installation Mode:"       "$INSTALL_MODE"
     box_line "Domain (n8n):"           "https://${N8N_FQDN}"
+    if [[ -n "$evo_fqdn" && "$INSTALL_MODE" == "queue" ]]; then
+        box_line "Evolution API:"       "https://${evo_fqdn}"
+    fi
     if [[ "$compose_profiles" == *monitoring* ]]; then
         box_line "Grafana:"             "https://${graf_fqdn}"
         if [[ "${expose_prom,,}" == "true" ]]; then
@@ -1496,7 +1509,7 @@ cleanup_stack() {
 parse_args() {
     # NOTE: keep short/long specs in sync with usage()
     SHORT="i:uv:m:c:bad:l:r:e:ns:fh"
-    LONG="install:,upgrade,version:,ssl-email:,cleanup:,backup,available,dir:,log-level:,restore:,email-to:,notify-on-success,remote-name:,force,help,mode:,monitoring,expose-prometheus,subdomain-n8n:,subdomain-grafana:,subdomain-prometheus:,basic-auth-user:,basic-auth-pass:"
+    LONG="install:,upgrade,version:,ssl-email:,cleanup:,backup,available,dir:,log-level:,restore:,email-to:,notify-on-success,remote-name:,force,help,mode:,monitoring,expose-prometheus,subdomain-n8n:,subdomain-grafana:,subdomain-prometheus:,subdomain-evolution:,basic-auth-user:,basic-auth-pass:"
 
     PARSED=$(getopt --options="$SHORT" --longoptions="$LONG" --name "$0" -- "$@") || usage
     eval set -- "$PARSED"
@@ -1581,6 +1594,10 @@ parse_args() {
                 ;;
             --subdomain-prometheus)
                 SUBDOMAIN_PROMETHEUS="$2"
+                shift 2
+                ;;
+            --subdomain-evolution)
+                SUBDOMAIN_EVOLUTION="$2"
                 shift 2
                 ;;
             --basic-auth-user)
