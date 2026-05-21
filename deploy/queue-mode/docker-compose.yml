@@ -240,7 +240,7 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
     restart: unless-stopped
     environment:
-      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=require
     networks: [n8n-network]
     security_opt: [no-new-privileges:true]
     depends_on:
@@ -264,7 +264,11 @@ services:
     profiles: ["monitoring"]
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     restart: unless-stopped
-    privileged: true
+    cap_add:
+      - SYS_PTRACE
+    cap_drop:
+      - ALL
+    security_opt: [no-new-privileges:true]
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro

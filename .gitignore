@@ -1,0 +1,6 @@
+.env
+secrets/
+backups/
+logs/
+*.tar.gz
+*.sha256
